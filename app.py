@@ -107,7 +107,7 @@ def get_openrouter_explanation(shap_values_obj, input_df, predicted_type, target
                 "Content-Type": "application/json"
             },
             data=json.dumps({
-                "model": "tngtech/deepseek-r1t2-chimera:freee",
+                "model": "tngtech/deepseek-r1t2-chimera:free",
                 "messages": [{"role": "user", "content": full_prompt}]
             })
         )
