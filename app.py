@@ -59,7 +59,7 @@ def get_impact_description(shap_value):
 
 # Function to get explanation from OpenRouter AI
 def get_openrouter_explanation(shap_values_obj, input_df, predicted_type, target_encoder):
-    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+    OPENROUTER_API_KEY = "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"
     YOUR_SITE_URL = "http://localhost:8501" # Placeholder
     YOUR_SITE_NAME = "NeuroSleep"
 
