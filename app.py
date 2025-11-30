@@ -54,21 +54,59 @@ def get_impact_description(shap_value):
         
     return f"{magnitude} {direction} влияние"
 
+# Helper function for fallback explanation
+def generate_local_explanation(impacts, predicted_type):
+    sorted_impacts = sorted(impacts, key=lambda x: abs(x['shap']), reverse=True)
+    
+    explanation = f"### Базовый анализ вашего сна\n\n"
+    explanation += f"_(Не удалось подключиться к ИИ-ассистенту, это базовое объяснение.)_\n\n"
+    explanation += f"Похоже, мы предсказали вам **{predicted_type}** сон.\n\n"
+    
+    # Find the most impactful factor (positive or negative)
+    if sorted_impacts:
+        top_factor = sorted_impacts[0]
+        if top_factor['shap'] > 0.1:
+            explanation += f"Главным **положительным** фактором для вашего сна стал **'{top_factor['name']}'** со значением '{top_factor['value']}'. Это отлично! "
+        else:
+            explanation += f"Наибольшее **негативное** влияние на ваш сон оказал **'{top_factor['name']}'** со значением '{top_factor['value']}'. "
+
+    # Find the most negative factor for advice
+    negative_factors = [f for f in sorted_impacts if f['shap'] < 0]
+    if negative_factors:
+        top_negative_factor = negative_factors[0]
+        factor_name = top_negative_factor['name']
+        
+        advice = ""
+        if 'Stress_Level' in factor_name:
+            advice = "Высокий уровень стресса — частая причина плохого сна. Попробуйте уделить 10-15 минут перед сном для расслабляющих практик, например, медитации или прослушивания спокойной музыки."
+        elif 'Sleep_Hours' in factor_name:
+            advice = f"Вы спали всего {top_negative_factor['value']}, что может быть недостаточно для полноценного восстановления. Постарайтесь ложиться спать немного раньше."
+        elif 'Phone_Usage_Hours_Before_Sleep' in factor_name:
+            advice = "Использование гаджетов прямо перед сном мешает выработке мелатонина. Постарайтесь отложить телефон хотя бы за час до сна. Лучше почитайте книгу."
+        elif 'Caffeine_mg' in factor_name:
+            advice = "Вы употребили довольно много кофеина. Постарайтесь не пить кофе как минимум за 6 часов до сна, чтобы он не мешал вашему отдыху."
+        elif 'Alcohol_Consumption' in factor_name:
+            advice = "Алкоголь может помочь уснуть, но значительно ухудшает качество второй половины ночи. Постарайтесь избегать его употребления перед сном."
+        elif 'Smoking' in factor_name:
+            advice = "Никотин является стимулятором, который может нарушать структуру сна. Уменьшение курения, особенно перед сном, может улучшить его качество."
+        else:
+            advice = "Обратите внимание на факторы, которые негативно влияют на ваш сон, и постарайтесь их скорректировать."
+        
+        explanation += f"\n\n**Наш совет:** {advice}"
+    else:
+        explanation += "\n\n**Наш совет:** Отличные показатели! Продолжайте в том же духе!"
+
+    return explanation
+
 # Function to get explanation from OpenRouter AI
 def get_openrouter_explanation(shap_values_obj, input_df, predicted_type, target_encoder):
-    OPENROUTER_API_KEY = "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"
+    OPENROUTER_API_KEY = "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"
     YOUR_SITE_URL = "http://localhost:8501" # Placeholder
     YOUR_SITE_NAME = "NeuroSleep"
-
-    if not OPENROUTER_API_KEY:
-        return "Ошибка: Ключ API OpenRouter не найден. Пожалуйста, убедитесь, что он задан в вашем .env файле."
-
+    
+    # Construct data for both API call and fallback
     predicted_class_index = list(target_encoder.classes_).index(predicted_type)
     shap_values_for_class = shap_values_obj.values[0, :, predicted_class_index]
-    
-    prompt_intro = f"Ты — дружелюбный эксперт по сну по имени NeuroSleep. Твоя задача — объяснить пользователю простым языком, почему ему был предсказан тип сна '{predicted_type}'. Основывайся на данных, которые я тебе предоставлю. В твоем ответе не должно быть никаких чисел или числовых значений. Объясни 2-3 самых важных фактора и дай один конкретный, полезный совет для улучшения сна, связанный с самым негативным фактором. Ответ должен быть строго на русском языке, на других языках нельзя никак."
-    
-    factors_text = "Вот данные пользователя и как они повлияли на прогноз:\n"
     
     user_values = {
         'Age': input_df['Age'].iloc[0], 'Caffeine_mg': f"{input_df['Caffeine_mg'].iloc[0]} мг",
@@ -86,38 +124,34 @@ def get_openrouter_explanation(shap_values_obj, input_df, predicted_type, target
         feature_name = col.replace('_encoded', '').replace('_', ' ').capitalize()
         shap_value = shap_values_for_class[i]
         user_value = user_values.get(col, user_values.get(feature_name, 'N/A'))
-        impact_desc = get_impact_description(shap_value)
-        impacts.append({'name': feature_name, 'value': user_value, 'desc': impact_desc, 'shap': shap_value})
+        impacts.append({'name': feature_name, 'value': user_value, 'shap': shap_value})
 
-    # Sort by absolute shap value to discuss most important factors
-    impacts.sort(key=lambda x: abs(x['shap']), reverse=True)
-    
+    if not OPENROUTER_API_KEY:
+        st.warning("Ключ API OpenRouter не найден. Отображается базовое объяснение.", icon="⚠️")
+        return generate_local_explanation(impacts, predicted_type)
+
+    # Construct prompt for the real API call
+    prompt_intro = f"Ты — дружелюбный эксперт по сну по имени NeuroSleep. Твоя задача — объяснить пользователю простым языком, почему ему был предсказан тип сна '{predicted_type}'. Основывайся на данных, которые я тебе предоставлю. В твоем ответе не должно быть никаких чисел или числовых значений. Объясни 2-3 самых важных фактора и дай один конкретный, полезный совет для улучшения сна, связанный с самым негативным фактором. Ответ должен быть на русском языке."
+    factors_text = "Вот данные пользователя и качественное описание их влияния на прогноз:\n"
     for impact in impacts:
-        factors_text += f"- {impact['name']}: {impact['value']} (влияние: {impact['desc']})\n"
-
+        impact_desc = get_impact_description(impact['shap'])
+        factors_text += f"- {impact['name']}: {impact['value']} (влияние: {impact_desc})\n"
+    
     full_prompt = f"{prompt_intro}\n\n{factors_text}"
 
     # Real API Call
     try:
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "HTTP-Referer": YOUR_SITE_URL, "X-Title": YOUR_SITE_NAME,
-                "Content-Type": "application/json"
-            },
-            data=json.dumps({
-                "model": "tngtech/deepseek-r1t2-chimera:free",
-                "messages": [{"role": "user", "content": full_prompt}]
-            })
+            headers={ "Authorization": f"Bearer {OPENROUTER_API_KEY}", "HTTP-Referer": YOUR_SITE_URL, "X-Title": YOUR_SITE_NAME, "Content-Type": "application/json" },
+            data=json.dumps({ "model": "x-ai/grok-4.1-fast:free", "messages": [{"role": "user", "content": full_prompt}] })
         )
         response.raise_for_status()
         ai_response = response.json()['choices'][0]['message']['content']
         return ai_response
-    except requests.exceptions.RequestException as e:
-        return f"### Не удалось получить объяснение от ИИ\n\nПроизошла ошибка при обращении к OpenRouter: `{e}`"
-    except (KeyError, IndexError):
-        return "### Не удалось получить объяснение от ИИ\n\nПолучен неожиданный ответ от сервера."
+    except Exception:
+        st.warning("Не удалось получить ответ от ИИ-ассистента. Отображается базовое объяснение.", icon="⚠️")
+        return generate_local_explanation(impacts, predicted_type)
 
 
 # Function to load the model and encoders
