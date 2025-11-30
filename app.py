@@ -100,7 +100,7 @@ def generate_local_explanation(impacts, predicted_type):
 
 # Function to get explanation from OpenRouter AI
 def get_openrouter_explanation(shap_values_obj, input_df, predicted_type, target_encoder):
-    OPENROUTER_API_KEY = "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"
+    OPENROUTER_API_KEY = "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"
     YOUR_SITE_URL = "http://localhost:8501" # Placeholder
     YOUR_SITE_NAME = "NeuroSleep"
     
