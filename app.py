@@ -8,8 +8,6 @@ import requests
 import json
 import os
 
-load_dotenv() # Загружаем переменные из .env файла
-
 # Перевод категориальных значений
 GENDER_TRANSLATIONS = {
     "Male": "Мужской",
