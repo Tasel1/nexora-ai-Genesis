@@ -59,7 +59,7 @@ def get_impact_description(shap_value):
 
 # Function to get explanation from OpenRouter AI
 def get_openrouter_explanation(shap_values_obj, input_df, predicted_type, target_encoder):
-    OPENROUTER_API_KEY = "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"
+    OPENROUTER_API_KEY = "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"
     YOUR_SITE_URL = "http://localhost:8501" # Placeholder
     YOUR_SITE_NAME = "NeuroSleep"
 
@@ -110,7 +110,7 @@ def get_openrouter_explanation(shap_values_obj, input_df, predicted_type, target
                 "Content-Type": "application/json"
             },
             data=json.dumps({
-                "model": "mistralai/mixtral-8x7b-instruct",
+                "model": "x-ai/grok-4.1-fast:free",
                 "messages": [{"role": "user", "content": full_prompt}]
             })
         )
